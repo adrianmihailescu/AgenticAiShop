@@ -1,6 +1,5 @@
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using AiShoppingAgent.Api.Models;
 
 namespace AiShoppingAgent.Api.Services;
@@ -34,14 +33,15 @@ public class GeminiService
         _config = config;
         _productService = productService;
         _basketService = basketService;
+        Console.WriteLine("GeminiService initialized");
     }
 
     public async Task<object> HandleUserQueryAsync(string userText)
     {
-        // 1. Ask Gemini to create a plan
+        Console.WriteLine("HandleUserQueryAsync() hit");
+
         var plan = await GetPlanFromGeminiAsync(userText);
 
-        // 2. Execute the plan with local tools
         var results = new List<object>();
 
         foreach (var action in plan.Actions)
@@ -54,22 +54,14 @@ public class GeminiService
                         action.MinRam,
                         action.Cpu
                     );
-                    results.Add(new
-                    {
-                        tool = "searchProducts",
-                        products
-                    });
+                    results.Add(new { tool = "searchProducts", products });
                     break;
 
                 case "addToBasket":
                     if (action.ProductId.HasValue)
                     {
                         _basketService.AddToBasket(action.ProductId.Value);
-                        results.Add(new
-                        {
-                            tool = "addToBasket",
-                            productId = action.ProductId
-                        });
+                        results.Add(new { tool = "addToBasket", productId = action.ProductId });
                     }
                     break;
 
@@ -81,112 +73,137 @@ public class GeminiService
                             x.Product.Name,
                             x.Quantity,
                             x.Product.Price
-                        })
-                        .ToList();
-                    results.Add(new
-                    {
-                        tool = "showBasket",
-                        basket
-                    });
+                        }).ToList();
+
+                    results.Add(new { tool = "showBasket", basket });
                     break;
             }
         }
 
-        // 3. Return both the plan and execution results
-        return new
-        {
-            plan,
-            results
-        };
+        return new { plan, results };
+    }
+
+    private static string RemoveLeadingThoughts(string text)
+    {
+        text = text.Trim();
+
+        int idx = text.IndexOf('{');
+        if (idx > 0)
+            return text.Substring(idx).Trim();
+
+        return text;
     }
 
     private async Task<AgentPlan> GetPlanFromGeminiAsync(string userText)
     {
-        var apiKey = _config["Gemini:ApiKey"] ?? Environment.GetEnvironmentVariable("GEMINI_API_KEY");
-        var model = _config["Gemini:Model"] ?? "gemini-1.5-flash";
-
+        var apiKey = _config["Gemini:ApiKey"];
         if (string.IsNullOrEmpty(apiKey))
-        {
             throw new InvalidOperationException("Gemini API key is not configured.");
-        }
 
-        // Google Gemini REST endpoint pattern (v1beta, generative model)
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={apiKey}";
+        Console.WriteLine("Gemini API key OK.");
+
+        var model = _config["Gemini:Model"];
+
+        var url = $"https://generativelanguage.googleapis.com/v1/models/{model}:generateContent?key={apiKey}";
+        Console.WriteLine("Gemini URL: " + url);
 
         var systemInstruction = @"
-You are a shopping agent that works with a local product catalog.
-The user might mention emag.ro but you only use LOCAL tools.
+You are a shopping agent that works with a LOCAL product catalog only.
+Respond ONLY with JSON, no explanations.
 
-You MUST respond ONLY with a JSON object of the form:
-
+Example:
 {
   ""actions"": [
-    {
-      ""type"": ""searchProducts"",
-      ""query"": ""laptop"",
-      ""minRam"": 12,
-      ""cpu"": ""core i5""
-    },
-    {
-      ""type"": ""addToBasket"",
-      ""productId"": 2
-    },
-    {
-      ""type"": ""showBasket""
-    }
+    { ""type"": ""searchProducts"", ""query"": ""laptop"", ""minRam"": 12, ""cpu"": ""i5"" },
+    { ""type"": ""addToBasket"", ""productId"": 2 },
+    { ""type"": ""showBasket"" }
   ]
 }
-
-Allowed action types:
-- ""searchProducts"" (query: string?, minRam: int?, cpu: string?)
-- ""addToBasket"" (productId: int)
-- ""showBasket"" (no extra fields)
-
-Do NOT write any explanation outside JSON.
-If unsure which productId to pick, choose the BEST MATCHING product.
 ";
 
         var payload = new
         {
             contents = new[]
             {
-                new {
+                new
+                {
                     role = "user",
-                    parts = new object[]
+                    parts = new[]
                     {
-                        new { text = systemInstruction + "\n\nUser: " + userText }
+                        new { text = systemInstruction },
+                        new { text = userText }
                     }
                 }
             },
             generationConfig = new
             {
-                temperature = 0.2,
-                responseMimeType = "application/json" // Ask for JSON directly
+                temperature = 0.2
             }
         };
 
         var response = await _httpClient.PostAsJsonAsync(url, payload);
+
+        var raw = await response.Content.ReadAsStringAsync();
+        Console.WriteLine("RAW GEMINI RESPONSE:");
+        Console.WriteLine(raw);
+
         response.EnsureSuccessStatusCode();
 
-        var json = await response.Content.ReadAsStringAsync();
+        var doc = JsonDocument.Parse(raw);
 
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
+        var text = doc.RootElement
+            .GetProperty("candidates")[0]
+            .GetProperty("content")
+            .GetProperty("parts")[0]
+            .GetProperty("text")
+            .GetString();
 
-        var candidates = root.GetProperty("candidates");
-        var content = candidates[0].GetProperty("content");
-        var parts = content.GetProperty("parts");
-        var text = parts[0].GetProperty("text").GetString();
+        Console.WriteLine("MODEL OUTPUT:");
+        Console.WriteLine(text);
 
-        // text should be a JSON string we can now parse
-        var plan = JsonSerializer.Deserialize<AgentPlan>(text!, new JsonSerializerOptions
+        // --------------------------------------------
+        // Remove Markdown code fences
+        // --------------------------------------------
+        var cleaned = text!
+            .Trim()
+            .Replace("```json", "")
+            .Replace("```", "")
+            .Trim();
+
+        Console.WriteLine("CLEANED OUTPUT:");
+        Console.WriteLine(cleaned);
+
+        // --------------------------------------------
+        // Parse JSON safely
+        // --------------------------------------------
+        AgentPlan? plan = null;
+
+        try
         {
-            PropertyNameCaseInsensitive = true
-        });
+            // Extra safety: prevent Gemini "thinking" from breaking JSON
+            cleaned = RemoveLeadingThoughts(cleaned);
 
-        if (plan == null || plan.Actions == null)
+            plan = JsonSerializer.Deserialize<AgentPlan>(
+                cleaned,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+            );
+        }
+        catch (Exception ex)
         {
-            return new AgentPlan(new List<AgentAction>());
+            Console.WriteLine("JSON PARSE ERROR:");
+            Console.WriteLine(ex);
+        }
+
+        // If parsing failed → return safe error structure
+        if (plan == null || plan.Actions == null || plan.Actions.Count == 0)
+        {
+            Console.WriteLine("Returning fallback AgentPlan.");
+            return new AgentPlan(
+                new List<AgentAction>
+                {
+                    new AgentAction("error", null, null, null, null)
+                }
+            );
         }
 
         return plan;
