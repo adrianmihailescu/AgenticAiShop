@@ -1,0 +1,58 @@
+# ---- VS Code ----
+.vscode/
+*.code-workspace
+
+# ---- Node / React / Vite ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Vite cache
+vite.config.ts.timestamp-*
+.vite/
+
+# ---- .NET / C# ----
+bin/
+obj/
+*.user
+*.suo
+*.rsuser
+*.userprefs
+*.cache/
+*.db
+*.db-shm
+*.db-wal
+
+# ASP.NET secret keys
+appsettings.Development.json
+
+# dotnet dev certs
+aspnetcore-*.json
+
+# ---- Logs ----
+*.log
+logs/
+*.tld
+*.ldf
+
+# ---- Environment Variables ----
+.env
+.env.*
+!.env.example
+
+# ---- OS / System ----
+.DS_Store
+Thumbs.db
+
+# ---- Temporary files ----
+*.tmp
+*.temp
+~$
+
+# ---- Generated Files ----
+Generated/
