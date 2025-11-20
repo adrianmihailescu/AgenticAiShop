@@ -111,6 +111,15 @@ public class GeminiService
 You are a shopping agent that works with a LOCAL product catalog only.
 Respond ONLY with JSON, no explanations.
 
+IMPORTANT RULES:
+1. If the user references external websites (e.g., emag.ro), IGNORE the website.
+2. ALWAYS produce a valid plan using ONLY these action types:
+    - searchProducts
+    - addToBasket
+    - showBasket
+3. Infer the intent from the sentence even if the request references an external site.
+4. Always return JSON only, no explanation.
+
 Example:
 {
   ""actions"": [
@@ -182,6 +191,9 @@ Example:
         {
             // Extra safety: prevent Gemini "thinking" from breaking JSON
             cleaned = RemoveLeadingThoughts(cleaned);
+
+            Console.WriteLine("CLEANED JSON BEFORE PARSE:");
+            Console.WriteLine(cleaned);
 
             plan = JsonSerializer.Deserialize<AgentPlan>(
                 cleaned,

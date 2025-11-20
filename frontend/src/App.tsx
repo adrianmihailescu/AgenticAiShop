@@ -83,7 +83,7 @@ function App() {
       <p>
         Type a natural language command, e.g.:<br />
         <code>
-          Go to emag.ro and search for a laptop with 12GB RAM Core i5 and add it
+          Go to the local inmemory storage search for a laptop with 12GB RAM Core i5 and add it
           to my basket.
         </code>
       </p>
