@@ -286,3 +286,38 @@ body {
 .muted {
   color: var(--text-muted);
 }
+
+/* LOADING BAR ------------------------------------------------------ */
+
+.loading-bar {
+  width: 160px;
+  height: 8px;
+  border-radius: 5px;
+  background: rgba(37, 99, 235, 0.15);
+  overflow: hidden;
+  position: relative;
+  margin-left: 0.75rem;
+  align-self: center;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.loading-bar-fill {
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent-strong) 100%
+  );
+  border-radius: 5px;
+  animation: loadingBarAnim 1s linear infinite;
+}
+
+@keyframes loadingBarAnim {
+  0% {
+    transform: translateX(-40%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}

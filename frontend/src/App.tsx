@@ -27,6 +27,12 @@ function App() {
     }
   };
 
+    const LoadingBar = () => (
+    <div className="loading-bar">
+      <div className="loading-bar-fill" />
+    </div>
+  );
+
   const renderToolResult = (result: AgentResult, index: number) => {
     if (result.tool === "searchProducts" && result.products) {
       return (
@@ -122,6 +128,7 @@ function App() {
             >
               {loading ? "Thinking..." : "Run Agent"}
             </button>
+            {loading && <LoadingBar />}
           </div>
 
           {error && (
